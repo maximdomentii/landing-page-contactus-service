@@ -13,6 +13,10 @@ Metadata:
     ToEmailAddress:
       Type: String
       Description: Email address you want contact form submittions to go to
+    ContactUsEmailTemplate:
+      Type: String
+      Description: Name of the SES email tamplate
+      Default: 'contact-us-email-template'
 Description: 'Serverless contact form on the AWS Cloud.'
 Resources:
   S3Bucket:
