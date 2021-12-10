@@ -1,0 +1,8 @@
+{
+    "Template":{
+        "TemplateName": "contact-us-email-template",
+        "SubjectPart": "maximdomentii.com contact us from {{name}}",
+        "HtmlPart": "<h1>New message from {{name}}</h1><br/><p>{{text}}</p><br/><p>Contact details</p><p>Phone: {{phone}}</p><p>Email: {{email}}<p>",
+        "TextPart": "New message from {{name}}\n\n\n{{text}}\n\nContact details\nPhone: {{phone}}\nEmail: {{email}}"
+    }
+}
