@@ -15,7 +15,7 @@ exports.handler = (event, context, callback) => {
                 RECEIVER
             ]
         },
-        Template: process.env.ContactUsEmailTemplate,
+        Template: process.env.EmailTemplate,
         TemplateData: JSON.stringify({
             "name": event.name,
             "text": event.desc,
@@ -24,7 +24,6 @@ exports.handler = (event, context, callback) => {
         }),
         Source: SENDER
     };
-
 
     let responseStatusCode = 200;
     let responseResult = "Success";
