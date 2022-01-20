@@ -15,6 +15,12 @@ Parameters:
     Type: String
     Description: Name of the SES email tamplate
     Default: 'contact-us-email-template'
+  username:
+    Type: String
+    Description: Username of the Lambda autorizer function
+  password:
+    Type: String
+    Description: Password of the Lambda autorizer function
 
 Resources:
 
@@ -27,6 +33,7 @@ Resources:
             Principal:
               Service:
                 - lambda.amazonaws.com
+                - apigateway.amazonaws.com
             Action: "sts:AssumeRole"
       ManagedPolicyArns:
         - "arn:aws:iam::319977881563:policy/service-role/AWSLambdaBasicExecutionRole-aeabd6f2-086b-42ec-84af-6b54e6efe8a8"
@@ -107,29 +114,86 @@ Resources:
             let responseStatusCode = 200;
             let responseResult = "Success";
             ses.sendTemplatedEmail(params, (err, data) => {
-              callback(null, {err: err, data: data});
               if (err) {
-                responseStatusCode = 500;
-                responseResult = "Failed";
                 console.log('Email failed:', err);
-                context.fail(err);
+                callback(null, {
+                  "statusCode": 500,
+                  "status": "Failed"
+                });
               } else {
                 console.log('Email sent:', data);
-                context.succeed(event);
+                callback(null, {
+                  "statusCode": 200,
+                  "status": "Success"
+                });
               }
             });
-            
-            const response = {
-              "statusCode": responseStatusCode,
-              "headers": {
-                "Content-Type": "application/json", "Access-Control-Allow-Origin": "*"
-              },
-              "isBase64Encoded": false,
-              "body": "{ \"result\": " + responseResult + "}"
-            }
-          
-            return response;
           };
+
+  LambdaAuthorizerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: mailfwd-api-authorizer
+      Runtime: nodejs14.x
+      Timeout: 5
+      Handler: index.handler
+      Role: !GetAtt LambdaFunctionRole.Arn
+      Environment:
+        Variables:
+          username:
+            Ref: username
+          password:
+            Ref: password
+      Code:
+        ZipFile: |
+          const USERNAME = process.env.username;
+          const PASSWORD = process.env.password;
+          
+          exports.handler = (event, context, callback) => {
+            const authorizationHeader = event.headers.Authorization;
+        
+            if (!authorizationHeader) {
+              return callback('Unauthorized');
+            }
+        
+            const encodedCreds = authorizationHeader.split(' ')[1];
+            const plainCreds = (new Buffer(encodedCreds, 'base64')).toString().split(':');
+            const username = plainCreds[0];
+            const password = plainCreds[1];
+        
+            if (!(username === USERNAME && password === PASSWORD)) {
+              return callback('Unauthorized');
+            }
+        
+            const authResponse = buildAllowAllPolicy(event, username);
+        
+            callback(null, authResponse);
+          }
+          
+          const buildAllowAllPolicy = (event, principalId) => {
+            const apiOptions = {};
+            const tmp = event.methodArn.split(':');
+            const apiGatewayArnTmp = tmp[5].split('/');
+            const awsAccountId = tmp[4];
+            const awsRegion = tmp[3];
+            const restApiId = apiGatewayArnTmp[0];
+            const stage = apiGatewayArnTmp[1];
+            const apiArn = 'arn:aws:execute-api:' + awsRegion + ':' + awsAccountId + ':' + restApiId + '/' + stage + '/*/*';
+            const policy = {
+              principalId: principalId,
+              policyDocument: {
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Action: 'execute-api:Invoke',
+                  Effect: 'Allow',
+                  Resource: [apiArn]
+                }
+              ]
+            }
+          }
+          return policy;
+        };
 
   lambdaApiGatewayInvoke:
     Type: AWS::Lambda::Permission
@@ -154,6 +218,14 @@ Resources:
       EndpointConfiguration:
         Types:
           - "REGIONAL"
+  ApiGatewayResponse:
+    Type: "AWS::ApiGateway::GatewayResponse"
+    Properties:
+      ResponseParameters:
+        gatewayresponse.header.WWW-Authenticate: "'Basic'"
+      ResponseType: UNAUTHORIZED
+      RestApiId: !Ref ApiGatewayRestApi
+      StatusCode: '401'
 
   ApiGatewayResource:
     Type: 'AWS::ApiGateway::Resource'
@@ -165,6 +237,25 @@ Resources:
         - RootResourceId
       PathPart: contact-us
 
+  ApiGatewayAuthorizer:
+    Type: AWS::ApiGateway::Authorizer
+    Properties:
+      AuthorizerCredentials: !GetAtt LambdaFunctionRole.Arn
+      AuthorizerResultTtlInSeconds: '0'
+      AuthorizerUri: !Join
+        - ''
+        - - 'arn:aws:apigateway:'
+          - !Ref 'AWS::Region'
+          - ':lambda:path/2015-03-31/functions/'
+          - !GetAtt
+            - LambdaAuthorizerFunction
+            - Arn
+          - /invocations
+      Type: TOKEN
+      IdentitySource: method.request.header.Authentication
+      Name: mailfwd-authorizer
+      RestApiId: !Ref ApiGatewayRestApi
+
   ApiGatewayMethod2:
     Type: "AWS::ApiGateway::Method"
     DependsOn: ApiGatewayResource
@@ -172,7 +263,8 @@ Resources:
       RestApiId: !Ref ApiGatewayRestApi
       ResourceId: !Ref ApiGatewayResource
       HttpMethod: "POST"
-      AuthorizationType: "NONE"
+      AuthorizationType: "CUSTOM"
+      AuthorizerId: !Ref ApiGatewayAuthorizer
       ApiKeyRequired: false
       Integration:
         IntegrationHttpMethod: POST
@@ -182,6 +274,8 @@ Resources:
           - lambdaArn: !GetAtt LambdaFunction.Arn
         IntegrationResponses:
           - StatusCode: "200"
+      RequestParameters:
+          method.request.header.Authorization: true
       MethodResponses:
         - ResponseModels:
             "application/json": "Empty"

@@ -14,7 +14,7 @@ aws cloudformation deploy \
   --template-file cloudformation-template-output.yaml \
   --stack-name landing-page-contactus-service \
   --capabilities CAPABILITY_IAM \
-  --parameter-overrides "ContactUsEmailTemplateName=contact-us-email-template" "ToEmailAddress=???"
+  --parameter-overrides "ContactUsEmailTemplateName=contact-us-email-template" "ToEmailAddress=???" "username=???" "password=???" 
 ```
 
 
