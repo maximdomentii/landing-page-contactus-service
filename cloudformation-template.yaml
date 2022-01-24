@@ -150,28 +150,27 @@ Resources:
           const PASSWORD = process.env.password;
           
           exports.handler = (event, context, callback) => {
-            const authorizationHeader = event.headers.Authorization;
-        
+            const authorizationHeader = event.headers.Authorization || event.headers.authorization;
+          
             if (!authorizationHeader) {
               return callback('Unauthorized');
             }
-        
+          
             const encodedCreds = authorizationHeader.split(' ')[1];
             const plainCreds = (new Buffer(encodedCreds, 'base64')).toString().split(':');
             const username = plainCreds[0];
             const password = plainCreds[1];
-        
+          
             if (!(username === USERNAME && password === PASSWORD)) {
               return callback('Unauthorized');
             }
-        
+          
             const authResponse = buildAllowAllPolicy(event, username);
-        
+          
             callback(null, authResponse);
-          }
+          };
           
           const buildAllowAllPolicy = (event, principalId) => {
-            const apiOptions = {};
             const tmp = event.methodArn.split(':');
             const apiGatewayArnTmp = tmp[5].split('/');
             const awsAccountId = tmp[4];
@@ -183,17 +182,15 @@ Resources:
               principalId: principalId,
               policyDocument: {
               Version: '2012-10-17',
-              Statement: [
-                {
+                Statement: [{
                   Action: 'execute-api:Invoke',
                   Effect: 'Allow',
                   Resource: [apiArn]
-                }
-              ]
+                }]
+              }
             }
-          }
-          return policy;
-        };
+            return policy;
+          };
 
   lambdaApiGatewayInvoke:
     Type: AWS::Lambda::Permission
@@ -251,8 +248,8 @@ Resources:
             - LambdaAuthorizerFunction
             - Arn
           - /invocations
-      Type: TOKEN
-      IdentitySource: method.request.header.Authentication
+      Type: REQUEST
+      IdentitySource: method.request.header.Authorization
       Name: mailfwd-authorizer
       RestApiId: !Ref ApiGatewayRestApi
 
