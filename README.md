@@ -16,11 +16,3 @@ aws cloudformation deploy \
   --capabilities CAPABILITY_IAM \
   --parameter-overrides "FromEmailAddress=???" "ToEmailAddress=???" "password=???" 
 ```
-
-
-## What AWS resources does this template use?
-* Lambda (API Function)
-* API Gateway (HTTP proxy to Lambda)
-* SES (Send us the email)
-* SES Email template
-* IAM (AWS permissions & users)
